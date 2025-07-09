@@ -53,8 +53,6 @@ for team_url in team_urls:
         df["Team"] = team
         df["Season"] = year
         official_list.append(df)
-        print(year)
-        print(team)
         # Wait 10 seconds between every 2 scrapes to ensure we don't
         # get blocked from web scraping
         time.sleep(10)
