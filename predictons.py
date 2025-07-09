@@ -7,11 +7,13 @@ matches = pd.read_csv('matches.csv', index_col=0)
 # Remove the "total" season stats
 matches_cleaned = matches.dropna(subset=['Rk']).copy()
 
+# Convert data to datetime object
 matches_cleaned["Date"] = pd.to_datetime(matches_cleaned["Date"])
 # Make the result an int for ML model to work
 matches_cleaned["Target"] = (matches_cleaned["Rslt"] == "W").astype("int")
-# Home game = -1, Away game = 0
+# Home game = 1, Away game = 0
 matches_cleaned["Venue_Code"] = matches_cleaned["Unnamed: 5_level_1"].astype("category").cat.codes
+matches_cleaned["Venue_Code"] = abs(matches_cleaned["Venue_Code"])
 # Assign codes 0-31 for all the teams
 matches_cleaned["Opp_Code"] = matches_cleaned["Opp"].astype("category").cat.codes
 # Day code for day of week 0-6 = Monday-Sunday
@@ -30,7 +32,7 @@ rf.fit(train[predictors], train["Target"])
 preds = rf.predict(test[predictors])
 acc = accuracy_score(test["Target"], preds)
 '''
-Accuracy: 0.5533088235294118
+Accuracy: 0.5551470588235294
 '''
 
 
@@ -40,11 +42,35 @@ tab = pd.crosstab(index = combined["actual"], columns=combined["prediction"])
 Tab: 0 = L/T, 1 = W
 prediction   0    1
 actual
-0           149   123
+0           150   122
 1           120   152
 '''
 
 # Precision score: When model predicts win, percent of time
 # that they actually won
-p_score = precision_score(test["Target"], preds) # 0.5527272727272727, not great
-print(p_score)
+p_score = precision_score(test["Target"], preds)
+'''
+Precision Score: 0.5547445255474452, not great
+'''
+
+grouped_matches = matches_cleaned.groupby("Team")
+group = grouped_matches.get_group("BAL")
+
+# Take into account how team is doing before game
+def rolling_averages(group, cols, new_cols):
+    group = group.sort_values("Date")
+    # Take current week out and compute rolling averages of 3 games before
+    rolling_stats = group[cols].rolling(3, closed='left').mean()
+    group[new_cols] = rolling_stats
+    group = group.dropna(subset = new_cols)
+    return group
+
+# Cols to consider for rolling averages
+cols = ["Pts", "PtsO", "Cmp%", "PYds", "PTD", "PY/A", "RYds", "RTD", "RY/A"]
+new_cols = [f"{c}_rolling" for c in cols]
+
+# Apply to all teams and return
+matches_rolling = matches_cleaned.groupby("Team").apply(lambda x: rolling_averages(x, cols, new_cols))
+matches_rolling = matches_rolling.droplevel("Team")
+matches_rolling.index = range(matches_rolling.shape[0])
+print(matches_rolling)
