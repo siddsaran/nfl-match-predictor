@@ -22,7 +22,7 @@ for l in afc_links:
 for l in nfc_links:
     links.append(l.get("href"))
 team_urls = [f"https://pro-football-reference.com{l}" for l in links]
-
+years = [2024, 2023, 2022]
 # For each team, go to their page and go to their schedule page and extract
 # that table to a DataFrame, and add team name to the DataFrame
 official_list = []
@@ -40,17 +40,24 @@ for team_url in team_urls:
             schedule_link = temp_link
             break
     team = schedule_link.split("/")[2].upper()
-    link = f"https://pro-football-reference.com{schedule_link}"
-    data = requests.get(link)
+    for year in years:
+        split_link = schedule_link.split("/")
+        split_link[3] = str(year)
+        schedule_link = "/".join(split_link)
+        link = f"https://pro-football-reference.com{schedule_link}"
+        data = requests.get(link)
 
-    # Read in the table and convert to a DataFrame
-    df = pd.read_html(data.text, match="2024 Regular Season")[0]
-    df.columns = df.columns.droplevel()
-    df["Team"] = team
-    official_list.append(df)
-    # Wait 10 seconds between every 2 scrapes to ensure we don't
-    # get blocked from web scraping
-    time.sleep(10)
+        # Read in the table and convert to a DataFrame
+        df = pd.read_html(data.text, match=f"{year} Regular Season")[0]
+        df.columns = df.columns.droplevel()
+        df["Team"] = team
+        df["Season"] = year
+        official_list.append(df)
+        print(year)
+        print(team)
+        # Wait 10 seconds between every 2 scrapes to ensure we don't
+        # get blocked from web scraping
+        time.sleep(10)
 
 # Combine all teams' DataFrames and convert to csv for preparation
 # for prediction model

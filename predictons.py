@@ -16,5 +16,5 @@ matches_cleaned["Opp_Code"] = matches_cleaned["Opp"].astype("category").cat.code
 # Day code for day of week 0-6 = Monday-Sunday
 matches_cleaned["Day_Code"] = matches_cleaned["Date"].dt.dayofweek
 
-
+rf = RandomForestClassifier(n_estimators=50, min_samples_split=10, random_state=1)
 
