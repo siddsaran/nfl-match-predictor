@@ -19,6 +19,8 @@ matches_cleaned["Opp_Code"] = matches_cleaned["Opp"].astype("category").cat.code
 # Day code for day of week 0-6 = Monday-Sunday
 matches_cleaned["Day_Code"] = matches_cleaned["Date"].dt.dayofweek
 
+matches_cleaned["ToP"] = matches_cleaned["ToP"].str.split(":").str[0].astype(int)
+
 rf = RandomForestClassifier(n_estimators=50, min_samples_split=10, random_state=1)
 # Train on 2022 and 2023 seasons, Test on 2024 season
 train = matches_cleaned[matches_cleaned["Date"] < "2024-02-01"]
@@ -31,27 +33,15 @@ predictors = ["Venue_Code", "Opp_Code", "Day_Code"]
 rf.fit(train[predictors], train["Target"])
 preds = rf.predict(test[predictors])
 acc = accuracy_score(test["Target"], preds)
-'''
-Accuracy: 0.5551470588235294
-'''
 
 
 combined = pd.DataFrame(dict(actual=test["Target"], prediction=preds))
 tab = pd.crosstab(index = combined["actual"], columns=combined["prediction"])
-'''
-Tab: 0 = L/T, 1 = W
-prediction   0    1
-actual
-0           150   122
-1           120   152
-'''
 
 # Precision score: When model predicts win, percent of time
 # that they actually won
 p_score = precision_score(test["Target"], preds)
-'''
-Precision Score: 0.5547445255474452, not great
-'''
+print(p_score)
 
 grouped_matches = matches_cleaned.groupby("Team")
 group = grouped_matches.get_group("BAL")
@@ -66,11 +56,37 @@ def rolling_averages(group, cols, new_cols):
     return group
 
 # Cols to consider for rolling averages
-cols = ["Pts", "PtsO", "Cmp%", "PYds", "PTD", "PY/A", "RYds", "RTD", "RY/A"]
+cols = ["Pts", "PtsO","Cmp%", "PYds", "PTD", "PY/A",
+        "RYds", "RTD", "RY/A", "FGM", "XPM", "Int", "TO", "1stD", "3DConv", "Pen"]
+all_cols = predictors + cols
+
 new_cols = [f"{c}_rolling" for c in cols]
 
 # Apply to all teams and return
 matches_rolling = matches_cleaned.groupby("Team").apply(lambda x: rolling_averages(x, cols, new_cols))
 matches_rolling = matches_rolling.droplevel("Team")
 matches_rolling.index = range(matches_rolling.shape[0])
-print(matches_rolling)
+
+def make_predictions(data, predictors):
+    train = data[data["Date"] < "2024-02-01"]
+    test = data[data["Date"] > "2024-02-01"]
+    rf.fit(train[predictors], train["Target"])
+    preds = rf.predict(test[predictors])
+    combined = pd.DataFrame(dict(actual=test["Target"], prediction=preds))
+    precision = precision_score(test["Target"], preds)
+    return combined, precision
+
+combined, precision = make_predictions(matches_rolling, predictors + new_cols)
+print(precision)
+
+combined = combined.merge(matches_rolling[["Date", "Team", "Opp", "Rslt"]], left_index=True, right_index=True)
+
+feature_importances = pd.DataFrame({
+    'features':all_cols,
+    'importance':rf.feature_importances_
+}).sort_values(by='importance', ascending=False)
+
+all_cols = feature_importances.head(3)['features'].tolist()
+new_cols = [f"{c}_rolling" for c in all_cols if c in cols]
+combined, precision = make_predictions(matches_rolling, predictors + new_cols)
+print(precision)
